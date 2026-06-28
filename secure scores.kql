@@ -1,0 +1,11 @@
+SecurityResources
+| where type == 'microsoft.security/securescores'
+| extend subscriptionId = tostring(properties.subscriptionId)
+| extend Group = case(
+    subscriptionId in (InfraSubs), 'Infra',
+    subscriptionId in (SAPSubs), 'SAP',
+    subscriptionId in (DigitalSubs), 'Digital',
+    'Other'
+)
+| where Group in ({subscriptionGroup}) or '{subscriptionGroup}' == 'All'
+| summarize SecureScore = avg(tostring(properties.score.current)) by Group
