@@ -1,0 +1,22 @@
+let InfraSubs = dynamic([
+"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+"yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+"zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+]);
+
+SecurityResources
+| where subscriptionId in (InfraSubs)
+| where type == "microsoft.security/regulatorycompliancestandards/regulatoryComplianceControls/regulatoryComplianceAssessments"
+| extend
+    complianceStandard = extract(@"/regulatoryComplianceStandards/(.+)/regulatoryComplianceControls",1,id),
+    passed = toint(properties.passedResources),
+    failed = toint(properties.failedResources),
+    skipped = toint(properties.skippedResources)
+| summarize
+    Passed = sum(passed),
+    Failed = sum(failed),
+    Skipped = sum(skipped)
+by complianceStandard
+| extend Total = Passed + Failed + Skipped
+| extend Compliance = round((todouble(Passed)/Total)*100,2)
+| order by Compliance desc
