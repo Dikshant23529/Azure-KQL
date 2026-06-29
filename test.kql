@@ -1,0 +1,91 @@
+// ============================================
+// CIEM - OVER-PROVISIONED IDENTITIES (USERS ONLY)
+// ============================================
+let _sapSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2"]);
+let _infraSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb"]);
+let _digitalSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx"]);
+let _selectedGroup = "all";
+
+let _selectedSubs = case(
+    _selectedGroup == "sap", _sapSubs,
+    _selectedGroup == "infra", _infraSubs,
+    _selectedGroup == "digital", _digitalSubs,
+    union(_sapSubs, _infraSubs, _digitalSubs)
+);
+
+let _subGroupMapping = 
+    _sapSubs | extend Group = "SAP"
+    | union (_infraSubs | extend Group = "Infra")
+    | union (_digitalSubs | extend Group = "Digital")
+    | project SubscriptionId = tostring(value), Group;
+
+// Over-provisioned identities assessment
+securityresources
+| where type == "microsoft.security/assessments"
+| where name startswith "c0b34a74-50d1-4e8c-a312-ca0b2c8c8a27"  // Over-provisioned identities
+| extend 
+    IdentityName = tostring(properties.additionalData.identityName),
+    IdentityType = tostring(properties.additionalData.identityType),
+    HealthState = tostring(properties.status.code),
+    SubscriptionId = subscriptionId,
+    SubscriptionName = subscriptionDisplayName,
+    AssignedRoles = tostring(properties.additionalData.assignedRoles),
+    LastActivity = tostring(properties.additionalData.lastActivity)
+| where SubscriptionId in (_selectedSubs)
+// Filter for User identities only (exclude Service Principals and Groups)
+| where IdentityType !in ("ServicePrincipal", "Group", "Service Principal")
+| where isnotempty(IdentityName)
+| join kind=leftouter (_subGroupMapping) on SubscriptionId
+| project 
+    Group,
+    SubscriptionName,
+    IdentityName,
+    IdentityType,
+    HealthState,
+    AssignedRoles,
+    LastActivity
+| order by Group, IdentityName
+
+
+
+// ============================================
+// CIEM - IDENTITY COUNT BY GROUP & TYPE
+// ============================================
+let _sapSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1"]);
+let _infraSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa"]);
+let _digitalSubs = dynamic(["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx"]);
+let _selectedGroup = "all";
+
+let _selectedSubs = case(
+    _selectedGroup == "sap", _sapSubs,
+    _selectedGroup == "infra", _infraSubs,
+    _selectedGroup == "digital", _digitalSubs,
+    union(_sapSubs, _infraSubs, _digitalSubs)
+);
+
+let _subGroupMapping = 
+    _sapSubs | extend Group = "SAP"
+    | union (_infraSubs | extend Group = "Infra")
+    | union (_digitalSubs | extend Group = "Digital")
+    | project SubscriptionId = tostring(value), Group;
+
+securityresources
+| where type == "microsoft.security/assessments"
+| where name startswith "c0b34a74-50d1-4e8c-a312-ca0b2c8c8a27"
+| extend 
+    IdentityType = tostring(properties.additionalData.identityType),
+    HealthState = tostring(properties.status.code),
+    SubscriptionId = subscriptionId
+| where SubscriptionId in (_selectedSubs)
+| where isnotempty(IdentityType)
+| join kind=leftouter (_subGroupMapping) on SubscriptionId
+| summarize 
+    TotalIdentities = count(),
+    OverProvisioned = countif(HealthState == "Unhealthy"),
+    HealthyIdentities = countif(HealthState == "Healthy")
+by Group, IdentityType
+| extend OverProvisionedPct = round(todouble(OverProvisioned) / todouble(TotalIdentities) * 100, 2)
+| order by Group, IdentityType
+
+
+
