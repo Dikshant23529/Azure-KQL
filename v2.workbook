@@ -1,0 +1,239 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "resourceId": "merged",
+      "name": "parameters",
+      "content": {
+        "parameters": [
+          {
+            "id": "SubscriptionGroup",
+            "type": 4,
+            "name": "SubscriptionGroup",
+            "displayName": "📋 Subscription Group",
+            "description": "Select which subscription group to analyze",
+            "typeSettings": {
+              "multipleSelection": false,
+              "showSearch": false
+            },
+            "values": [
+              {"value": "all", "label": "🌐 All Groups"},
+              {"value": "sap", "label": "🟢 SAP Subscriptions"},
+              {"value": "infra", "label": "🔵 Infra Subscriptions"},
+              {"value": "digital", "label": "🟣 Digital Subscriptions"}
+            ]
+          },
+          {
+            "id": "ScoreThreshold",
+            "type": 2,
+            "name": "ScoreThreshold",
+            "displayName": "⚠️ Score Threshold (%)",
+            "value": 50,
+            "typeSettings": {"min": 0, "max": 100, "step": 5}
+          }
+        ]
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "header",
+      "content": {
+        "query": "print Banner = \"🔒 Azure Security Posture Dashboard - Full Analysis\"",
+        "size": 0,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      }
+    },
+    {
+      "type": 12,
+      "name": "section-secure-score",
+      "content": {
+        "title": "📊 SECURE SCORE ANALYSIS",
+        "titleStyle": "title",
+        "collapse": false
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "secure-score-summary",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _threshold = todouble('{ScoreThreshold}');\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/securescores\"\n| extend SecureScore = todouble(properties.score.percentage), SubscriptionId = subscriptionId\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| summarize TotalSubscriptions = count(), AverageScore = round(avg(SecureScore), 2), MinScore = round(min(SecureScore), 2), MaxScore = round(max(SecureScore), 2), SubsBelowThreshold = countif(SecureScore < _threshold), SubsAboveThreshold = countif(SecureScore >= _threshold)\n| project Metric = \"Summary\", TotalSubscriptions, AverageScore, MinScore, MaxScore, SubsBelowThreshold, SubsAboveThreshold",
+        "size": 0,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {"columnId": "TotalSubscriptions", "formatter": 5, "formatOptions": {"palette": "blue"}},
+            {"columnId": "AverageScore", "formatter": 5, "formatOptions": {"palette": "green"}},
+            {"columnId": "SubsBelowThreshold", "formatter": 5, "formatOptions": {"palette": "red"}},
+            {"columnId": "SubsAboveThreshold", "formatter": 5, "formatOptions": {"palette": "green"}}
+          ]
+        }
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "secure-score-chart",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _threshold = todouble('{ScoreThreshold}');\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/securescores\"\n| extend SecureScore = todouble(properties.score.percentage), SubscriptionId = subscriptionId, SubscriptionName = subscriptionDisplayName\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| project Group, SubscriptionName, SecureScore, Threshold = _threshold\n| order by SecureScore asc",
+        "size": 2,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "barchart",
+        "chartSettings": {
+          "group": "SubscriptionName",
+          "yAxis": [
+            {"columnId": "SecureScore", "color": "blue", "label": "Secure Score %"},
+            {"columnId": "Threshold", "color": "red", "label": "Threshold"}
+          ],
+          "xAxis": {"columnId": "SubscriptionName", "label": "Subscription"},
+          "legend": {"enabled": true, "position": "top"}
+        }
+      }
+    },
+    {
+      "type": 12,
+      "name": "section-recommendations",
+      "content": {
+        "title": "📋 SECURITY RECOMMENDATIONS BY SEVERITY",
+        "titleStyle": "title",
+        "collapse": false
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "recommendations-severity-summary",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/assessments\"\n| extend Recommendation = tostring(properties.assessment.displayName), Severity = tostring(properties.assessment.metadata.severity), HealthState = tostring(properties.status.code), SubscriptionId = subscriptionId\n| where HealthState in (\"Unhealthy\", \"Healthy\")\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| summarize Total = count(), Healthy = countif(HealthState == \"Healthy\"), Unhealthy = countif(HealthState == \"Unhealthy\"), UniqueRecommendations = dcount(Recommendation) by Severity\n| extend HealthyPct = round(todouble(Healthy) / todouble(Total) * 100, 2), UnhealthyPct = round(todouble(Unhealthy) / todouble(Total) * 100, 2)\n| order by case(Severity == \"Critical\", 1, Severity == \"High\", 2, Severity == \"Medium\", 3, Severity == \"Low\", 4, 5)\n| project Severity, Total, Healthy, Unhealthy, HealthyPct, UnhealthyPct, UniqueRecommendations",
+        "size": 0,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {"columnId": "Severity", "formatter": 6},
+            {"columnId": "Total", "formatter": 5, "formatOptions": {"palette": "gray"}},
+            {"columnId": "Healthy", "formatter": 5, "formatOptions": {"palette": "green"}},
+            {"columnId": "Unhealthy", "formatter": 5, "formatOptions": {"palette": "red"}},
+            {"columnId": "HealthyPct", "formatter": 8, "formatOptions": {"palette": "green", "min": 0, "max": 100}},
+            {"columnId": "UnhealthyPct", "formatter": 8, "formatOptions": {"palette": "red", "min": 0, "max": 100}}
+          ]
+        }
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "recommendations-by-group",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/assessments\"\n| extend Recommendation = tostring(properties.assessment.displayName), Severity = tostring(properties.assessment.metadata.severity), HealthState = tostring(properties.status.code), SubscriptionId = subscriptionId\n| where HealthState in (\"Unhealthy\", \"Healthy\")\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| summarize Total = count(), Healthy = countif(HealthState == \"Healthy\"), Unhealthy = countif(HealthState == \"Unhealthy\") by Group, Severity\n| extend HealthyPct = round(todouble(Healthy) / todouble(Total) * 100, 2), UnhealthyPct = round(todouble(Unhealthy) / todouble(Total) * 100, 2)\n| order by Group, case(Severity == \"Critical\", 1, Severity == \"High\", 2, Severity == \"Medium\", 3, Severity == \"Low\", 4, 5)",
+        "size": 1,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "piechart",
+        "chartSettings": {
+          "group": "Group",
+          "yAxis": [{"columnId": "Unhealthy", "label": "Unhealthy Findings"}],
+          "legend": {"enabled": true, "position": "right"},
+          "pieChartSettings": {"showLabels": true}
+        }
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "recommendations-stacked-chart",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/assessments\"\n| extend Severity = tostring(properties.assessment.metadata.severity), HealthState = tostring(properties.status.code), SubscriptionId = subscriptionId\n| where HealthState == \"Unhealthy\"\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| summarize Count = count() by Group, Severity\n| order by Group, case(Severity == \"Critical\", 1, Severity == \"High\", 2, Severity == \"Medium\", 3, Severity == \"Low\", 4, 5)",
+        "size": 1,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "barchart",
+        "chartSettings": {
+          "group": "Group",
+          "yAxis": [{"columnId": "Count", "label": "Unhealthy Recommendations"}],
+          "xAxis": {"columnId": "Group", "label": "Subscription Group"},
+          "series": {"columnId": "Severity"},
+          "legend": {"enabled": true, "position": "top"},
+          "seriesType": "stacked"
+        }
+      }
+    },
+    {
+      "type": 12,
+      "name": "section-attack-paths",
+      "content": {
+        "title": "🎯 ATTACK PATH ANALYSIS",
+        "titleStyle": "title",
+        "collapse": false
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "attack-path-summary",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/attackpaths\"\n| extend Severity = tostring(properties.severity), SubscriptionId = subscriptionId, PathType = case(tostring(properties.entities[0].type) == \"InternetFacing\", \"🌐 Internet Facing\", tostring(properties.sourceType) == \"InternetFacing\", \"🌐 Internet Facing\", tostring(properties.entities[0].type) == \"VirtualMachine\", \"💻 VM-Based\", tostring(properties.entities[0].type) == \"KeyVault\", \"🔑 KeyVault-Based\", tostring(properties.entities[0].type) == \"StorageAccount\", \"💾 Storage-Based\", \"⚠️ Other\")\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| summarize AttackPathCount = count() by Group, Severity, PathType\n| order by Group, case(Severity == \"Critical\", 1, Severity == \"High\", 2, Severity == \"Medium\", 3, 4)",
+        "size": 0,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {"columnId": "Group", "formatter": 6},
+            {"columnId": "Severity", "formatter": 6},
+            {"columnId": "PathType", "formatter": 6},
+            {"columnId": "AttackPathCount", "formatter": 5, "formatOptions": {"palette": "red"}}
+          ]
+        }
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "attack-path-detail",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/attackpaths\"\n| extend AttackPathName = name, Severity = tostring(properties.severity), Description = tostring(properties.description), SubscriptionId = subscriptionId, SubscriptionName = subscriptionDisplayName, PathType = case(tostring(properties.entities[0].type) == \"InternetFacing\", \"🌐 Internet Facing\", tostring(properties.sourceType) == \"InternetFacing\", \"🌐 Internet Facing\", tostring(properties.entities[0].type) == \"VirtualMachine\", \"💻 VM-Based\", tostring(properties.entities[0].type) == \"KeyVault\", \"🔑 KeyVault-Based\", tostring(properties.entities[0].type) == \"StorageAccount\", \"💾 Storage-Based\", \"⚠️ Other\")\n| where SubscriptionId in (_selectedSubs)\n| join kind=leftouter (_subGroupMapping) on SubscriptionId\n| project Group, SubscriptionName, AttackPathName, Severity, PathType, Description\n| order by case(Severity == \"Critical\", 1, Severity == \"High\", 2, Severity == \"Medium\", 3, 4)",
+        "size": 0,
+        "timeContext": {"durationMs": 86400000},
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {"columnId": "Group", "formatter": 6},
+            {"columnId": "Severity", "formatter": 6},
+            {"columnId": "PathType", "formatter": 6},
+            {"columnId": "Description", "formatter": 1, "formatOptions": {"linkTarget": null}}
+          ]
+        }
+      }
+    },
+    {
+      "type": 12,
+      "name": "section-ciem",
+      "content": {
+        "title": "👤 CIEM - OVER-PROVISIONED IDENTITIES (USERS ONLY)",
+        "titleStyle": "title",
+        "collapse": false
+      }
+    },
+    {
+      "type": 3,
+      "resourceId": "/providers/Microsoft.ResourceGraph/resources",
+      "name": "ciem-summary",
+      "content": {
+        "query": "let _sapSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx1\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx2\"]);\nlet _infraSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxa\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxb\"]);\nlet _digitalSubs = dynamic([\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\",\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx\"]);\nlet _selectedGroup = '{SubscriptionGroup}';\nlet _selectedSubs = case(_selectedGroup == \"sap\", _sapSubs, _selectedGroup == \"infra\", _infraSubs, _selectedGroup == \"digital\", _digitalSubs, union(_sapSubs, _infraSubs, _digitalSubs));\nlet _subGroupMapping = _sapSubs | extend Group = \"SAP\" | union (_infraSubs | extend Group = \"Infra\") | union (_digitalSubs | extend Group = \"Digital\") | project SubscriptionId = tostring(value), Group;\nsecurityresources\n| where type == \"microsoft.security/assessments\"\n| where name startswith \"c0b34a74-50d1-4e8c-a312-ca0b2c8c8a27\"\n| extend IdentityType = tostring(properties.additionalData.identityType), HealthState = tostring(properties.status.code), SubscriptionId = subscriptionId\n| where SubscriptionId in (_selectedSubs)\n| w
